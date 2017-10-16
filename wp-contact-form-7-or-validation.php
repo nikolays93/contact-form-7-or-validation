@@ -46,6 +46,9 @@ function wpcf7_or_validation($result, $tags) {
 }
 add_filter( 'wpcf7_validate', 'wpcf7_or_validation', 10, 2 );
 
+/**
+ * Добавляет понимание тэга с двумя звездочками (add ** support)
+ */
 function custom_wpcf7_or_validation() {
     wpcf7_add_form_tag(
         array( 'text**', 'email**', 'url**', 'tel**' ),
@@ -81,3 +84,51 @@ function custom_wpcf7_or_validation() {
         'wpcf7_textarea_form_tag_handler', array( 'name-attr' => true ) );
 }
 add_action( 'wpcf7_init', 'custom_wpcf7_or_validation' );
+
+/**
+ * Добавляет валидацию wpcf без проверки на пустое значение
+ */
+function wpcf7_text_or_validation_filter( $result, $tag ) {
+    $name = $tag->name;
+
+    $value = isset( $_POST[$name] )
+        ? trim( wp_unslash( strtr( (string) $_POST[$name], "\n", " " ) ) )
+        : '';
+
+    if ( '' !== $value ) {
+        if ( 'email' == $tag->basetype && ! wpcf7_is_email( $value ) ) {
+            $result->invalidate( $tag, wpcf7_get_message( 'invalid_email' ) );
+        }
+
+        if ( 'url' == $tag->basetype && ! wpcf7_is_url( $value ) ) {
+            $result->invalidate( $tag, wpcf7_get_message( 'invalid_url' ) );
+        }
+
+        if ( 'tel' == $tag->basetype && ! wpcf7_is_tel( $value ) ) {
+            $result->invalidate( $tag, wpcf7_get_message( 'invalid_tel' ) );
+        }
+
+        $maxlength = $tag->get_maxlength_option();
+        $minlength = $tag->get_minlength_option();
+
+        if ( $maxlength && $minlength && $maxlength < $minlength ) {
+            $maxlength = $minlength = null;
+        }
+
+        $code_units = wpcf7_count_code_units( stripslashes( $value ) );
+
+        if ( false !== $code_units ) {
+            if ( $maxlength && $maxlength < $code_units ) {
+                $result->invalidate( $tag, wpcf7_get_message( 'invalid_too_long' ) );
+            } elseif ( $minlength && $code_units < $minlength ) {
+                $result->invalidate( $tag, wpcf7_get_message( 'invalid_too_short' ) );
+            }
+        }
+    }
+
+    return $result;
+}
+add_filter( 'wpcf7_validate_text**', 'wpcf7_text_or_validation_filter', 10, 2 );
+add_filter( 'wpcf7_validate_email**', 'wpcf7_text_or_validation_filter', 10, 2 );
+add_filter( 'wpcf7_validate_url**', 'wpcf7_text_or_validation_filter', 10, 2 );
+add_filter( 'wpcf7_validate_tel**', 'wpcf7_text_or_validation_filter', 10, 2 );
